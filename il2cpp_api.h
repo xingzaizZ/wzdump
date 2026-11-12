@@ -116,6 +116,14 @@ int wz_il2cpp_wait_ready(int maxSeconds, int verbose);
 // UnityFramework 的实际加载基址（mach_header 地址），失败返回 0
 uintptr_t wz_unityframework_base(void);
 
+// ---------------------------------------------------------------- 方法指针
+// 返回**裸地址**（已剥 PAC）。
+// 调用方要调用时用 wz_pac_sign() 重新签（见 il2cpp_call.h）。
+void *wz_method_pointer(MethodInfo *mi);
+
+// 是否静态方法（METHOD_ATTRIBUTE_STATIC = 0x0010）
+int wz_method_is_static(MethodInfo *mi);
+
 #ifdef __cplusplus
 }
 #endif

@@ -30,9 +30,26 @@
 #include "wzlog.h"
 #include "il2cpp_api.h"
 #include "il2cpp_call.h"
+#include "il2cpp_dump.h"
 #include "hook_arm64.h"
 #include "thread_freeze.h"
 #include "wz_map.h"
+
+// ============================================================
+// 开关：是否执行 dump
+// ============================================================
+// dump 会写 50MB+ 文件、遍历 6 万个类，耗时几十秒且卡顿明显。
+// 所以默认关闭，只做解锁。
+//
+// 要 dump 时：在 app 的 Documents 目录下建一个空文件 `wzdump.on`，
+// 或者改这个宏为 1 重新编译。
+static int should_dump(void) {
+    const char *home = getenv("HOME");
+    if (!home || !*home) return 0;
+    char p[1024];
+    snprintf(p, sizeof(p), "%s/Documents/wzdump.on", home);
+    return access(p, F_OK) == 0 ? 1 : 0;
+}
 
 static int g_patched = 0;
 static int g_failed = 0;
@@ -404,7 +421,19 @@ static void *wz_worker(void *arg) {
 
     LOGI("=== patch 结果：成功 %d 处，失败 %d 处 ===\n", g_patched, g_failed);
 
-    // 4) L0 数据注入（可选）
+    // 4) 可选 dump
+    //    在 Documents 下建 wzdump.on 才执行，否则跳过（dump 很慢）
+    if (should_dump()) {
+        LOGI("=== 检测到 wzdump.on，执行 dump ===\n");
+        wzlog_stage("开始 dump");
+        int rc = wz_dump_run(NULL);
+        LOGI("=== dump 返回 %d ===\n", rc);
+        wzlog_stage("dump 完成");
+    } else {
+        LOGI("  未检测到 wzdump.on，跳过 dump\n");
+    }
+
+    // 5) L0 数据注入（可选）
     try_inject();
     wzlog_stage("L0 完成");
 
