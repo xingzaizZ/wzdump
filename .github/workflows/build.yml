@@ -1,9 +1,11 @@
 # ============================================================
-# build.yml —�?GitHub Actions 编译 wzdump.dylib
+# build.yml —— GitHub Actions 编译 wzdump.dylib
 # ============================================================
-# 触发：push �?main / 手动 workflow_dispatch
+# 触发：push 到 main / 手动 workflow_dispatch
 #
-# 产物�?#   build/wzdump.dylib          fat（arm64 + arm64e�?#   build/wzdump-arm64.dylib    单架构（A11 及更早）
+# 产物：
+#   build/wzdump.dylib          fat（arm64 + arm64e）
+#   build/wzdump-arm64.dylib    单架构（A11 及更早）
 #   build/wzdump-arm64e.dylib   单架构（A12 及更新）
 # ============================================================
 name: build-dylib
@@ -57,11 +59,12 @@ jobs:
                                      hook_arm64.m hook_arm64.h wz_map.h \
                                      pac_fix.h il2cpp_call.h \
                                      thread_freeze.h thread_freeze.m \
-                                     wzlog.h wzlog.m il2cpp_dump.h il2cpp_dump.m
+                                     wzlog.h wzlog.m \
+                                     il2cpp_dump.h il2cpp_dump.m
           echo ""
-          echo "===== 防闪退检查（R1~R6�?===="
+          echo "===== 防闪退检查（R1~R6）====="
           node tools/check_abi.js wz_unlock.m il2cpp_api.m \
-                                  hook_arm64.m thread_freeze.m wzlog.m
+                                  hook_arm64.m thread_freeze.m wzlog.m il2cpp_dump.m
 
       - name: 编译
         run: |
@@ -85,23 +88,15 @@ jobs:
           echo "===== 签名 ====="
           codesign -dv build/wzdump.dylib 2>&1 | head -12 || true
           echo ""
-          echo "===== 签名有效性（必须通过�?===="
+          echo "===== 签名有效性（必须通过）====="
           codesign -v --verbose=2 build/wzdump.dylib
           echo "codesign 校验通过"
 
-      - name: 验证 PAC 指令（arm64e 必须有）
+      - name: 验证 PAC 指令
         run: |
           if lipo -info build/wzdump.dylib | grep -q arm64e; then
-            echo "arm64e slice 存在，统计控制流指令�?
+            echo "arm64e slice 存在，统计控制流指令："
             node tools/scan_calls.js build/wzdump-arm64e.dylib
-            echo ""
-            N=$(node tools/scan_calls.js build/wzdump-arm64e.dylib | \
-                grep -oE 'BLRAAZ/BLRABZ *: [0-9]+' | grep -oE '[0-9]+$' || echo 0)
-            echo "BLRAAZ 数量: ${N:-0}"
-            if [ "${N:-0}" -eq 0 ]; then
-              echo "  !! 没有 BLRAAZ —�?-fptrauth-calls 可能没生�?
-              echo "  这不一定是错误（如果没有函数指针调用就不需要），但要人工确�?
-            fi
           fi
 
       - name: 上传 artifact
