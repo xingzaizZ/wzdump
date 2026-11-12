@@ -1,0 +1,31 @@
+﻿# 构建产物
+build/
+dist/
+*.dylib
+*.o
+*.dSYM/
+DerivedData/
+xcuserdata/
+
+# 系统
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 编辑器
+.vscode/
+.idea/
+*.swp
+*~
+
+# 临时
+*.log
+tmp/
+*.ipa
+*.tipa
+
+# 依赖
+node_modules/
+
+# 分析产物
+skin_chain.json
