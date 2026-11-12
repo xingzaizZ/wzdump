@@ -1,0 +1,10 @@
+# 所有文本文件统一 LF，防止 Windows 下 git 转成 CRLF 导致 bash 脚本在 CI 里报错
+* text=auto eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.m text eol=lf
+*.h text eol=lf
+*.js text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.dylib binary

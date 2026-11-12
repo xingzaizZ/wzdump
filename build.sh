@@ -1,7 +1,10 @@
 #!/usr/bin/env bash
 # ============================================================
-# build.sh —�?交叉编译 wzdump dylib（iOS arm64 / arm64e�?# ============================================================
-# 用法�?#   ./build.sh              # 默认 both（fat：arm64 + arm64e�?#   ./build.sh arm64        # 只要 arm64（A11 及更早）
+# build.sh —— 交叉编译 wzdump dylib（iOS arm64 / arm64e）
+# ============================================================
+# 用法：
+#   ./build.sh              # 默认 both（fat：arm64 + arm64e）
+#   ./build.sh arm64        # 只要 arm64（A11 及更早）
 #   ./build.sh arm64e       # 只要 arm64e（A12 及更新）
 #   ./build.sh both --clean # 先清 build 目录
 # ============================================================
@@ -25,7 +28,8 @@ FRAMEWORKS=(
   -framework CoreFoundation
 )
 
-# ---------------------------------------------------------------- 前置检�?if ! command -v xcrun >/dev/null 2>&1; then
+# ---------------------------------------------------------------- 前置检查
+if ! command -v xcrun >/dev/null 2>&1; then
   echo "错误：找不到 xcrun，需要在 macOS + Xcode 环境编译" >&2
   exit 1
 fi
@@ -56,14 +60,18 @@ build_arch() {
 
   echo "==> 编译 $ARCH"
 
-  # 关键编译选项�?  #   -fptrauth-calls      : arm64e 上生成指针认证指令�?  #                          不传这个，ptrauth.h 的宏会退化成恒等�?  #                          调用托管方法�?BLRAAZ 验签必失败�?  #   -fptrauth-intrinsics : 允许直接�?ptrauth_sign_unauthenticated
+  # 关键编译选项：
+  #   -fptrauth-calls      : arm64e 上生成指针认证指令。
+  #                          不传这个，ptrauth.h 的宏会退化成恒等，
+  #                          调用托管方法时 BLRAAZ 验签必失败。
+  #   -fptrauth-intrinsics : 允许直接写 ptrauth_sign_unauthenticated
   #   -Wl,-adhoc_codesign  : 让链接器直接产出 adhoc 签名
   local EXTRA=()
   if [ "$ARCH" = "arm64e" ]; then
     EXTRA=(-fptrauth-calls -fptrauth-intrinsics)
   fi
 
-  # 注意：macOS 自带 bash 3.2，set -u 下展开空数组会�?unbound variable
+  # 注意：macOS 自带 bash 3.2，set -u 下展开空数组会报 unbound variable
   xcrun -sdk iphoneos clang \
     -arch "$ARCH" \
     -target "$TARGET" \
@@ -86,7 +94,8 @@ build_arch() {
   echo "    -> $OUT/wzdump-$ARCH.dylib  ($(du -h "$OUT/wzdump-$ARCH.dylib" | cut -f1))"
 }
 
-# ---------------------------------------------------------------- 主流�?case "$ARCH_ARG" in
+# ---------------------------------------------------------------- 主流程
+case "$ARCH_ARG" in
   arm64)
     build_arch arm64
     cp "$OUT/wzdump-arm64.dylib" "$OUT/wzdump.dylib"
@@ -113,8 +122,12 @@ esac
 
 # ---------------------------------------------------------------- 签名
 #
-# 为什么用 codesign 而不�?ldid�?#   ldid �?fat 二进制只签第一�?slice，第二个 slice 没有 LC_CODE_SIGNATURE�?#   dyld 直接拒绝，报 "code object is not signed at all / In architecture: arm64e"�?#   系统 codesign �?slice 正确处理，并设好 CS_ADHOC 标志�?echo ""
-echo "==> 签名（codesign adhoc�?
+# 为什么用 codesign 而不是 ldid：
+#   ldid 对 fat 二进制只签第一个 slice，第二个 slice 没有 LC_CODE_SIGNATURE，
+#   dyld 直接拒绝，报 "code object is not signed at all / In architecture: arm64e"。
+#   系统 codesign 逐 slice 正确处理，并设好 CS_ADHOC 标志。
+echo ""
+echo "==> 签名（codesign adhoc）"
 codesign --force --sign - --timestamp=none "$OUT/wzdump.dylib"
 
 for a in arm64 arm64e; do
