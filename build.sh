@@ -120,12 +120,45 @@ case "$ARCH_ARG" in
     ;;
 esac
 
+# ---------------------------------------------------------------- 修 Mach-O
+#
+# 【这一步不能省，否则必闪退且没有日志】
+#
+#   clang 链接出来的 dylib 会同时带两条加密命令：
+#     LC_ENCRYPTION_INFO      (0x2c)  cryptid = 0    ← 正常
+#     LC_ENCRYPTION_INFO_64   (0x29)  cryptid = 29   ← 垃圾值
+#
+#   cryptid 合法值只有 0（未加密）和 1（已加密）。29 是链接器把
+#   别的字段错位写进来的（实测是 0x1d，即 LC_ENCRYPTION_INFO 的 cryptsize
+#   被误当成 cryptid）。
+#
+#   dyld 读到 cryptid 既不是 0 也不是 1 → 直接拒绝加载这个镜像 →
+#   **constructor 一行都不执行 → 闪退，日志文件根本不会生成**。
+#
+#   这就是「直接闪退、完全没日志」的真正原因。
+echo ""
+echo "==> 修 Mach-O（LC_ENCRYPTION_INFO_64 的非法 cryptid）"
+if command -v node >/dev/null 2>&1; then
+  node tools/fix_macho.js "$OUT/wzdump.dylib"
+  for a in arm64 arm64e; do
+    if [ -f "$OUT/wzdump-$a.dylib" ]; then
+      node tools/fix_macho.js "$OUT/wzdump-$a.dylib" >/dev/null 2>&1 || true
+    fi
+  done
+else
+  echo "    !! 找不到 node，跳过（产物会带非法 cryptid，dyld 会拒绝加载）"
+  exit 1
+fi
+
 # ---------------------------------------------------------------- 签名
 #
 # 为什么用 codesign 而不是 ldid：
 #   ldid 对 fat 二进制只签第一个 slice，第二个 slice 没有 LC_CODE_SIGNATURE，
 #   dyld 直接拒绝，报 "code object is not signed at all / In architecture: arm64e"。
 #   系统 codesign 逐 slice 正确处理，并设好 CS_ADHOC 标志。
+#
+# 注意顺序：必须先 fix_macho 再签名。
+#   签名会把 load command 区域算进 hash，改完不重签 codesign -v 必失败。
 echo ""
 echo "==> 签名（codesign adhoc）"
 codesign --force --sign - --timestamp=none "$OUT/wzdump.dylib"
@@ -136,6 +169,18 @@ for a in arm64 arm64e; do
   fi
 done
 echo "    OK"
+
+# ---------------------------------------------------------------- 加载安全检查
+#
+# 这几项任何一项不过，注入后都是「闪退且没日志」：
+#   1. filetype 必须是 MH_DYLIB(6)
+#   2. 所有 LC_ENCRYPTION_INFO* 的 cryptid 必须是 0 或 1
+#   3. 不能有 LC_MAIN（那是可执行文件才有的）
+echo ""
+echo "==> 加载安全检查"
+if command -v node >/dev/null 2>&1; then
+  node tools/check_loadable.js "$OUT/wzdump.dylib" || exit 1
+fi
 
 # ---------------------------------------------------------------- 签名校验
 echo ""
